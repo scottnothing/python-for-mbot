@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from lib.mBot import *
 from multiprocessing import freeze_support
 if __name__ == '__main__':
@@ -10,7 +11,7 @@ if __name__ == '__main__':
 				"C5":523,"D5":587,"E5":659,"F5":698,"G5":784,"A5":880,"B5":988}
 	music = ["E4","E4","F4","G4","G4","F4","E4","D4","C4","C4","D4","E4","E4","D4","D4"];
 	while(1):
-		try:	
+		try:
 			for i in range(0,len(music)):
 				bot.doBuzzer(tones[music[i]],500)
 				sleep(0.5)
