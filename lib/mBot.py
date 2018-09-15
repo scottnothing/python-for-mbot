@@ -14,7 +14,7 @@ class mSerial():
 
 	def start(self, port):
 		self.ser = serial.Serial(port,115200)
-	
+
 	def device(self):
 		return self.ser
 
@@ -50,13 +50,14 @@ class mSerial():
 
 	def close(self):
 		self.ser.close()
-		
+
+
 class mHID():
 	def __init__(self):
 		print self
-		
+
 	def start(self):
-		
+
 		self.manager = Manager()
 		self.dict = self.manager.dict()
 		self.dict.device = hid.device()
@@ -65,7 +66,7 @@ class mHID():
 		print "start"
 		self.buffer = []
 		self.bufferIndex = 0
-	
+
 	def enumerate(self):
 		print "enumerate"
 		for dev in self.dict.device.enumerate():
@@ -84,10 +85,10 @@ class mHID():
 		c = self.buffer[0]
 		self.buffer = self.buffer[1:]
 		return unichr(c)
-		
+
 	def isOpen(self):
 		return True
-		
+
 	def inWaiting(self):
 		buf = self.dict.device.read(64)
 		l = 0
@@ -97,65 +98,66 @@ class mHID():
 			for i in range(0,l):
 				self.buffer += [buf[i+1]]
 		return len(self.buffer)
-		
+
 	def close(self):
 		self.dict.device.close()
-		
+
+
 class mBot():
 	def __init__(self):
 		print "init mBot"
-		signal.signal(signal.SIGINT, self.exit)
+		# signal.signal(signal.SIGINT, self.exit)
 		self.manager = Manager()
-		self.__selectors = self.manager.dict()
+		#self.__selectors = self.manager.dict()
+		self.__selectors = {}
 		self.buffer = []
 		self.bufferIndex = 0
 		self.isParseStart = False
 		self.exiting = False
 		self.isParseStartIndex = 0
-		
+
 	def startWithSerial(self, port):
 		self.device = mSerial()
 		self.device.start(port)
 		self.start()
-	
+
 	def startWithHID(self):
 		self.device = mHID()
 		self.device.start()
 		self.start()
-	
+
 	def excepthook(self, exctype, value, traceback):
+		print "Exiting..."
 		self.close()
-		
+
 	def start(self):
 		sys.excepthook = self.excepthook
 		th = threading.Thread(target=self.__onRead,args=(self.onParse,))
 		th.start()
-		
+
 	def close(self):
-		self.device.close()
-		
-	def exit(self, signal, frame):
+		self.doMove(0, 0)
 		self.exiting = True
-		sys.exit(0)
-		
+		sleep(0.2)
+		self.device.close()
+
 	def __onRead(self,callback):
 		while 1:
 			if(self.exiting==True):
 				break
-			try:	
+			try:
 				if self.device.isOpen()==True:
 					n = self.device.inWaiting()
 					for i in range(n):
 						r = ord(self.device.read())
 						callback(r)
 					sleep(0.01)
-				else:	
+				else:
 					sleep(0.5)
-			except Exception,ex:
-				print str(ex)
+			except Exception, ex:
 				self.close()
-				sleep(1)
-				
+				break
+
 	def __writePackage(self,pack):
 		self.device.writePackage(pack)
 
@@ -170,22 +172,22 @@ class mBot():
 
 	def doMove(self,leftSpeed,rightSpeed):
 		self.__writePackage(bytearray([0xff,0x55,0x7,0x0,0x2,0x5]+self.short2bytes(-leftSpeed)+self.short2bytes(rightSpeed)))
-		
+
 	def doServo(self,port,slot,angle):
 		self.__writePackage(bytearray([0xff,0x55,0x6,0x0,0x2,0xb,port,slot,angle]))
-	
+
 	def doBuzzer(self,buzzer,time=0):
 		self.__writePackage(bytearray([0xff,0x55,0x7,0x0,0x2,0x22]+self.short2bytes(buzzer)+self.short2bytes(time)))
 
 	def doSevSegDisplay(self,port,display):
 		self.__writePackage(bytearray([0xff,0x55,0x8,0x0,0x2,0x9,port]+self.float2bytes(display)))
-		
+
 	def doIROnBoard(self,message):
 		self.__writePackage(bytearray([0xff,0x55,len(message)+3,0x0,0x2,0xd,message]))
-		
+
 	def requestLightOnBoard(self,extID,callback):
 		self.requestLight(extID,8,callback)
-	
+
 	def requestLight(self,extID,port,callback):
 		self.__doCallback(extID,callback)
 		self.__writePackage(bytearray([0xff,0x55,0x4,extID,0x1,0x3,port]))
@@ -193,29 +195,29 @@ class mBot():
 	def requestButtonOnBoard(self,extID,callback):
 		self.__doCallback(extID,callback)
 		self.__writePackage(bytearray([0xff,0x55,0x4,extID,0x1,0x1f,0x7]))
-		
+
 	def requestIROnBoard(self,extID,callback):
 		self.__doCallback(extID,callback)
 		self.__writePackage(bytearray([0xff,0x55,0x3,extID,0x1,0xd]))
-		
+
 	def requestUltrasonicSensor(self,extID,port,callback):
 		self.__doCallback(extID,callback)
 		self.__writePackage(bytearray([0xff,0x55,0x4,extID,0x1,0x1,port]))
-		
+
 	def requestLineFollower(self,extID,port,callback):
 		self.__doCallback(extID,callback)
 		self.__writePackage(bytearray([0xff,0x55,0x4,extID,0x1,0x11,port]))
-	
+
 	def onParse(self, byte):
 		position = 0
-		value = 0	
+		value = 0
 		self.buffer+=[byte]
 		bufferLength = len(self.buffer)
 		if bufferLength >= 2:
 			if (self.buffer[bufferLength-1]==0x55 and self.buffer[bufferLength-2]==0xff):
 				self.isParseStart = True
-				self.isParseStartIndex = bufferLength-2	
-			if (self.buffer[bufferLength-1]==0xa and self.buffer[bufferLength-2]==0xd and self.isParseStart==True):			
+				self.isParseStartIndex = bufferLength-2
+			if (self.buffer[bufferLength-1]==0xa and self.buffer[bufferLength-2]==0xd and self.isParseStart==True):
 				self.isParseStart = False
 				position = self.isParseStartIndex+2
 				extID = self.buffer[position]
@@ -258,7 +260,7 @@ class mBot():
 
 	def responseValue(self, extID, value):
 		self.__selectors["callback_"+str(extID)](value)
-		
+
 	def __doCallback(self, extID, callback):
 		self.__selectors["callback_"+str(extID)] = callback
 
